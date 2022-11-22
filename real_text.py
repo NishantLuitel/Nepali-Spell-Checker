@@ -12,6 +12,10 @@ def words(text): return re.findall(r'[\u0900-\u097F]+', text.lower())
 def words_bigram(text): return [tuple(x.split()) for x in re.findall(
     r'\b[\u0900-\u097F]+\s[\u0900-\u097F]+', text.lower(), overlapped=True)]
 
+def words_trigram(text): return re.findall(
+    r'\b[\u0900-\u097F]+\s[\u0900-\u097F]+\s[\u0900-\u097F]+', text.lower(),
+    overlapped=True)
+
 
 WORDS = Counter(words(open('data/compiled.txt', encoding="utf-8").read()))
 with open('data/saved_words.pickle','wb') as outputfile:
@@ -23,7 +27,12 @@ WORDS_bigram = Counter(words_bigram(
 
 with open('data/saved_bi_words.pickle','wb') as outputfile:
     pickle.dump(WORDS_bigram,outputfile)
+    
+WORDS_trigram = Counter(words_trigram(
+    open('data/compiled.txt', encoding="utf-8").read()))
 
+with open('data/saved_tri_words.pickle','wb') as outputfile:
+    pickle.dump(WORDS_trigram,outputfile)
 
 # List of all Nepali characters
 char_vocab = []
@@ -39,6 +48,10 @@ def probability(word, N=sum(WORDS.values())):
 def probability_bigram(bi_word, N=sum(WORDS_bigram.values())):
     "Probability of `two words` given as a tuple."
     return (WORDS_bigram[bi_word]+1) / N
+
+def probability_trigram(tri_word, N=sum(WORDS_trigram.values())):
+    "Probability of `two words` given as a tuple."
+    return (WORDS_trigram[tri_word]+1) / N
 
 
 def edits1(word):

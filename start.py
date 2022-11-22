@@ -5,6 +5,7 @@ from collections import Counter
 import itertools
 import math
 import pickle
+import numpy
 
 
 sample_factor = 0.05
@@ -38,8 +39,10 @@ WORDS = Counter(dict(WORDS.most_common(int(sample_factor*len(WORDS)))))
  
 with open('data/saved_bi_words.pickle','rb') as inputfile:
     WORDS_bigram = pickle.load(inputfile) 
-WORDS_trigram = Counter(words_trigram(
-    open('data/sample_np.txt', encoding="utf-8").read()))
+with open('data/saved_tri_words.pickle','rb') as inputfile:
+    WORDS_trigram = pickle.load(inputfile) 
+#WORDS_trigram = Counter(words_trigram(
+#    open('data/sample_np.txt', encoding="utf-8").read()))
 
 # List of all Nepali characters
 char_vocab = []
@@ -56,6 +59,9 @@ def probability_bigram(bi_word, N=sum(WORDS_bigram.values())):
     "Probability of `two words` given as a tuple."
     return (WORDS_bigram[bi_word]+1) / N
 
+def probability_trigram(tri_word, N=sum(WORDS_trigram.values())):
+    "Probability of `two words` given as a tuple."
+    return (WORDS_trigram[tri_word]+1) / N
 
 def edits1(word):
     "All edits that are one edit away from `word`."
@@ -112,6 +118,17 @@ def correctize(sentence, prior='bigram'):
         candidates.append(list(candidates_ordered(_)))
     candidate_sentences = list(itertools.product(*candidates))
     
+    if prior == 'trigram':
+        #bigram tokens for possible sentences
+        tri_tokens = [words_trigram(' '.join(sentence)) for sentence in candidate_sentences]
+        tri_token_probab = []
+        for row in tri_tokens:
+            tri_token_probab.append([probability_trigram(_) for _ in row])
+        sentences_probab = [math.prod(row) for row in tri_token_probab]
+        sorted_index = numpy.argsort(sentences_probab)
+    #return candidate_sentences[sentences_probab.index(max(sentences_probab))]
+        return [candidate_sentences[k] for k in sorted_index[::-1]]
+    
     if prior == 'bigram':
         #bigram tokens for possible sentences
         bi_tokens = [words_bigram(' '.join(sentence)) for sentence in candidate_sentences]
@@ -119,8 +136,11 @@ def correctize(sentence, prior='bigram'):
         for row in bi_tokens:
             bi_token_probab.append([probability_bigram(_) for _ in row])
         sentences_probab = [math.prod(row) for row in bi_token_probab]
-    return candidate_sentences[sentences_probab.index(max(sentences_probab))]
+        sorted_index = numpy.argsort(sentences_probab)
+    #return candidate_sentences[sentences_probab.index(max(sentences_probab))]
+        return [candidate_sentences[k] for k in sorted_index[::-1]]
 
+ 
     #return bi_token_probab
 
         
