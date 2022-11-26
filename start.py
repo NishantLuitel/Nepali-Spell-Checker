@@ -9,6 +9,7 @@ import numpy
 
 
 sample_factor = 0.05
+alpha = 0.8
 # def words(text): return re.findall(r'\w+', text.lower())
 
 
@@ -70,12 +71,13 @@ def likelihood(sentence,N=len(words_list)):
 def likelihood2(sentence,candidate_sentence,candidate_count):
     prod = 1    
     i = 0
-    for word,candidate_word in zip(sentence,candidate_sentence):
+    #print(sentence.split(),candidate_sentence)
+    for word,candidate_word in zip(sentence.split(),candidate_sentence):        
         if word==candidate_word:
-            prod*= 0.95
+            prod*= alpha
         else:
             N = candidate_count[i]
-            prod*= 0.05/N
+            prod*= (1-alpha)/N
         i+=1
     return prod
 
@@ -198,15 +200,15 @@ def correctize2(sentence, prior='bigram'):
     
     if prior == 'trigram':
         #bigram tokens for possible sentences
-        tri_tokens = [words_trigram(' '.join(sentence)) for sentence in candidate_sentences]
+        tri_tokens = [words_trigram(' '.join(_)) for _ in candidate_sentences]
         tri_token_probab = []
 
         for row in tri_tokens:
             tri_token_probab.append([probability_trigram(_) for _ in row])
             
-        sentence_likelihood = likelihood(sentence)
+        #sentence_likelihood = likelihood(sentence)
         #sentences_probab = [math.prod(row) for row in tri_token_probab]
-        sentences_probab_post = [math.prod(row)*sentence_likelihood for row in tri_token_probab]
+        sentences_probab_post = [math.prod(row)*likelihood2(sentence,candidate_sentence,candidate_count) for row,candidate_sentence in zip(tri_token_probab,candidate_sentences)]
         # sorted_index = numpy.argsort(sentences_probab)
         
         sorted_index = numpy.argsort(sentences_probab_post)
@@ -216,13 +218,13 @@ def correctize2(sentence, prior='bigram'):
     
     if prior == 'bigram':
         #bigram tokens for possible sentences
-        bi_tokens = [words_bigram(' '.join(sentence)) for sentence in candidate_sentences]
+        bi_tokens = [words_bigram(' '.join(_)) for _ in candidate_sentences]
         bi_token_probab = []
         for row in bi_tokens:
             bi_token_probab.append([probability_bigram(_) for _ in row])  
             #sentence_likelihood_ = likelihood2(sentence,candidate_sentences)
             
-        sentence_likelihood = likelihood(sentence)
+        #sentence_likelihood = likelihood(sentence)
         
         # sentences_probab_post = [math.prod(row)*sentence_likelihood for row in bi_token_probab]
         sentences_probab_post = [math.prod(row)*likelihood2(sentence,candidate_sentence,candidate_count) for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
