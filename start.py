@@ -8,8 +8,9 @@ import pickle
 import numpy
 
 
-sample_factor = 0.05
-alpha = 0.8
+sample_factor = 0.01
+sample_factor2 = 0.05
+alpha = 0.65
 # def words(text): return re.findall(r'\w+', text.lower())
 
 
@@ -17,9 +18,11 @@ def words(text): return re.findall(r'[\u0900-\u097F]+', text.lower())
 
 
 def words_bigram(text): return [tuple(x.split()) for x in re.findall
-                                (r'\b[\u0900-\u097F]+\s[\u0900-\u097F]+',
-                                 text.lower(), overlapped=True)]
+                                (r'\b[\u0900-\u097F]+\s[\u0900-\u097F]+',text.lower(), overlapped=True)]
 
+
+def words_bigram_from_list(sentence):
+    return [(sentence[i],sentence[i+1]) for i in range(len(sentence)-1)]
 
 def words_trigram(text): return re.findall(
     r'\b[\u0900-\u097F]+\s[\u0900-\u097F]+\s[\u0900-\u097F]+', text.lower(),
@@ -30,8 +33,12 @@ def words_trigram(text): return re.findall(
 with open('data/saved_words.pickle','rb') as inputfile:
     WORDS = pickle.load(inputfile) 
 print(int(sample_factor*len(WORDS)))
-    
+
+WORDS_full = WORDS
+#WORDS = Counter(dict(WORDS.most_common(int(sample_factor*len(WORDS)))))
+WORDS2 = Counter(dict(WORDS.most_common(int(sample_factor2*len(WORDS)))))
 WORDS = Counter(dict(WORDS.most_common(int(sample_factor*len(WORDS)))))
+
     
     
     
@@ -72,6 +79,7 @@ def likelihood2(sentence,candidate_sentence,candidate_count):
     prod = 1    
     i = 0
     #print(sentence.split(),candidate_sentence)
+    
     for word,candidate_word in zip(sentence.split(),candidate_sentence):        
         if word==candidate_word:
             prod*= alpha
@@ -112,6 +120,10 @@ def edits2(word):
     "All edits that are two edits away from `word`."
     return set(e2 for e1 in edits1(word) for e2 in edits1(e1))
 
+def edits2_(word):
+    for e1 in known_from_full(edits1(word)):
+        s = set( e2 for  e2 in edits1(e1))
+        return known_from_full(s)
 # Isn't exact
 
 
@@ -124,6 +136,14 @@ def known(words):
     "The subset of `words` that appear in the dictionary of WORDS."
     return set(w for w in words if w in WORDS)
 
+def known_from_WORDS2(words):
+    return set(w for w in words if w in WORDS2)
+    
+
+def known_from_full(words):
+    "The subset of `words` that appear in the dictionary of WORDS."
+    return set(w for w in words if w in WORDS_full)
+
 
 def candidates_ordered(word):
     "Generate possible spelling corrections for word."
@@ -134,9 +154,25 @@ def candidates_all(word):
     "Generate possible spelling corrections for word."
     return (set.union(known([word]), known(edits1(word)), known(edits2(word)) ,[word]))
 
-def candidates_all_within1(word):
+def candidates_all_from_full(word):
     "Generate possible spelling corrections for word."
-    return set.union(known([word]), known(edits1(word)),[word])
+    return (set.union(known_from_full([word]), known(edits1(word)), edits2_(word) ,[word]))
+
+def candidates_all_within1(word):
+    
+    "Generate possible spelling corrections for word."
+    return set.union(known_from_full([word]), known(edits1(word)),[word])
+
+def candidates_all_within1_full(word):
+    
+    "Generate possible spelling corrections for word."
+    return set.union(known_from_full([word]), known(edits1(word)),[word])
+
+
+def candidates_all_within1_full_expanded(word):
+    
+    "Generate possible spelling corrections for word."
+    return set.union(known_from_full([word]), known_from_WORDS2(edits1(word)),[word])
 
 
 def correction(word):
@@ -189,14 +225,27 @@ def correctize(sentence, prior='bigram'):
     #return candidate_sentences[sentences_probab.index(max(sentences_probab))]
         return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
 
-def correctize2(sentence, prior='bigram'):
+def correctize3(sentence, p_lambda = 1,prior='bigram',tokenized = False):
     "Corrects the given 'sentence' using minimum edit"
+    import time
+
+    t_start = time.time()
     tokens = words(sentence)
+    start1 = time.time()
     candidates = []    
     for _ in tokens:
-        candidates.append(list(candidates_all_within1(_)))
+        candidates.append(list(filter(lambda word: word in tokens or WORDS2[word]>1000 ,list(candidates_all_within1_full_expanded(_)))))
+    candidate_count = [len(_) for _ in candidates]  
+    print(candidate_count[0:len(candidates)])      
+    end1 = time.time()
+    print("Time passed", end1-start1,"sec")
+    
+    start1 = time.time()
     candidate_sentences = list(itertools.product(*candidates))
-    candidate_count = [len(_) for _ in candidate_sentences]
+    end1 = time.time()
+    print("Time passed", end1-start1,"sec")
+
+
     
     if prior == 'trigram':
         #bigram tokens for possible sentences
@@ -217,26 +266,58 @@ def correctize2(sentence, prior='bigram'):
         return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
     
     if prior == 'bigram':
+        start1 = time.time()
         #bigram tokens for possible sentences
         bi_tokens = [words_bigram(' '.join(_)) for _ in candidate_sentences]
+        #bi_tokens = [[a,b for zip(_[:-1],_[1:])] for _ in candidate_sentences]
+        end1 = time.time()
+        print("Time passed", end1-start1,"sec")
+        
         bi_token_probab = []
+        start1 = time.time()
         for row in bi_tokens:
             bi_token_probab.append([probability_bigram(_) for _ in row])  
             #sentence_likelihood_ = likelihood2(sentence,candidate_sentences)
-            
+        end1 = time.time()
+        print("Time passed", end1-start1,"sec")
         #sentence_likelihood = likelihood(sentence)
         
+        start1 = time.time()
         # sentences_probab_post = [math.prod(row)*sentence_likelihood for row in bi_token_probab]
-        sentences_probab_post = [math.prod(row)*likelihood2(sentence,candidate_sentence,candidate_count) for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
+        sentences_probab_post = [(math.prod(row)**p_lambda)*likelihood2(sentence,candidate_sentence,candidate_count) for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
+        end1 = time.time()
+        print("Time passed", end1-start1,"sec")
         
         sorted_index = numpy.argsort(sentences_probab_post)
         sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
+        
+
+        t_end = time.time()
+        print("Total Time passed", t_end-t_start,"sec")
     #return candidate_sentences[sentences_probab.index(max(sentences_probab))]
         return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
 
- 
+def correctize_with_window(sentence,window = 5):
+    tokens = words(sentence)
+    if len(tokens) < window:
+        return correctize3(sentence)
+    else:
+        windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
+        windows.append(tokens[-5:len(tokens)])
+        corrects = []
+        for _ in windows:
+            #corrects.append(correctize3(' '.join(_)))
+            d = correctize3(' '.join(_))
+            corrects.append(d)
+        return corrects
     #return bi_token_probab
 
-        
+def timer(fun,args):
+    import time
+    s = time.time()
+    k = fun(args)
+    e = time.time()
+    print("Time taken, : ",e-s," sec")
+    return k 
     
         
