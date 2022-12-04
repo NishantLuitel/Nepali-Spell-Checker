@@ -303,13 +303,18 @@ def correctize_with_window(sentence,window = 5):
         return correctize3(sentence)
     else:
         windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
-        windows.append(tokens[-5:len(tokens)])
+        remaining = 4*len(windows)
+        windows.append(tokens[remaining-1:])
         corrects = []
         for _ in windows:
             #corrects.append(correctize3(' '.join(_)))
             d = correctize3(' '.join(_))
             corrects.append(d)
         return corrects
+    
+def print_corrected_sentence(d,j = 0):
+    for i in range(len(d)):
+        print(d[i][0][j],end = ' ')
     #return bi_token_probab
 
 def timer(fun,args):
