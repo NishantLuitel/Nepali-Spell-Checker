@@ -297,10 +297,10 @@ def correctize3(sentence, p_lambda = 1,prior='bigram',tokenized = False):
     #return candidate_sentences[sentences_probab.index(max(sentences_probab))]
         return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
 
-def correctize_with_window(sentence,window = 5):
+def correctize_with_window(sentence,window = 5,p_lambda = 1):
     tokens = words(sentence)
     if len(tokens) < window:
-        return correctize3(sentence)
+        return correctize3(sentence,p_lambda=p_lambda)
     else:
         windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
         remaining = 4*len(windows)
@@ -308,13 +308,21 @@ def correctize_with_window(sentence,window = 5):
         corrects = []
         for _ in windows:
             #corrects.append(correctize3(' '.join(_)))
-            d = correctize3(' '.join(_))
+            d = correctize3(' '.join(_),p_lambda=p_lambda)
             corrects.append(d)
         return corrects
     
 def print_corrected_sentence(d,j = 0):
-    for i in range(len(d)):
-        print(d[i][0][j],end = ' ')
+    s = ''
+    k = []
+    if(len(d)>1):
+        for i in range(len(d)-1):
+            s += ' '.join(d[i][0][j][0:4])
+            s+=' '
+            k.append(d[i][0][0:5])
+    s+=' '.join(d[len(d)-1][0][j])
+    k.append(d[len(d)-1][0][0:5])
+    return s,k
     #return bi_token_probab
 
 def timer(fun,args):
