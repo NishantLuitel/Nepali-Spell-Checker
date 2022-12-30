@@ -25,6 +25,23 @@ with open('data/saved_words.pickle','wb') as outputfile:
 WORDS_bigram = Counter(words_bigram(
     open('data/compiled.txt', encoding="utf-8").read()))
 
+
+# def save_counter_bigram()
+#     i = 0
+#     start_l = ['<s>']*(n-1)
+#     start = '<s>\u0020'*(n-1)
+#     with open('data/compiled.txt', encoding='utf-8') as text:
+#         text = re.sub(r'\s+[\u0964]\s+', r'\u0020\u0964\u0020'+start, text)
+#         #text = re.findall(r'[\u0900-\u097F]+|\u003c\u002f\u0073\u003e|\u003c\u0073\u003e',text.lower().strip())
+#         text = start_l + text
+#         counter = Counter([tuple(x.split()) for x in re.findall(r'\s+[\u0900-\u097F]+\s+[\u0900-\u097F]+|\u003c\u0073\u003e\s+[\u0900-\u097F]+|[\u0900-\u097F]+\s+\u003c\u0073\u003e', line, overlapped=True)])
+#     return counter
+
+# WORDS = Counter(words_bigram(text))
+# with open('data/saved_words_counter2.pickle','wb') as outputfile:
+#     pickle.dump(WORDS,outputfile)
+
+
 with open('data/saved_bi_words.pickle','wb') as outputfile:
     pickle.dump(WORDS_bigram,outputfile)
     
