@@ -478,11 +478,9 @@ def correctize_with_window(sentence,window = 5,p_lambda = 1,prior = 'bigram'):
     
 def correctize_with_window_knlm(sentence,model,window = 5,p_lambda = 1,prior = 'bigram'):
     '''
+        
     
-    '''
-    
-    
-    
+    '''  
     tokens = words(sentence)
     if len(tokens) <= window:
         return correctize_entire_knlm(sentence,model,p_lambda=p_lambda,prior = prior)
@@ -496,6 +494,8 @@ def correctize_with_window_knlm(sentence,model,window = 5,p_lambda = 1,prior = '
             d = correctize_entire_knlm(' '.join(_),model,p_lambda=p_lambda,prior = prior)
             corrects.append(d)
         return corrects
+   
+
     
 def return_choices(sample_sentences,model):
     d = correctize_with_window_knlm(sample_sentences,model)
