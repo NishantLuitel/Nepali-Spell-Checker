@@ -4,6 +4,7 @@ data/saved_words_counter1
 data/saved_words_counter2
 data/saved_words_counter3
 data/saved_model_knlm2
+data/compiled.txt
 old/
 
 models/saved_model_knlm2
