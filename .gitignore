@@ -6,6 +6,6 @@ data/saved_words_counter3
 data/saved_model_knlm2
 old/
 
-models/
+models/saved_model_knlm2
 
 trie_depth.pickle
