@@ -6,7 +6,7 @@ from metaphone import doublemetaphone
 with open('trie_depth.pickle','rb') as f:
     trie_depth = pickle.load(f)
     
-with open('depth_dict.pickle','rb') as f:
+with open('data/depth_dict.pickle','rb') as f:
     depth_dict = pickle.load(f)
 
 
@@ -85,7 +85,7 @@ def candidate_words(word,minimum = 1,start_depth = 0):
         c,c_ = check_distance(word, depth = start_depth,candidates = [])
         for i in range(len(depth_dict)-1):
             if c_ < minimum:
-                print("Entered depth, ",i+1)
+                #print("Entered depth, ",i+1)
                 c,c_ = check_distance(word, depth = start_depth+i+1,candidates = c)
     
     #Filter 2 edit of type delete
@@ -119,7 +119,7 @@ def candidate_words_trie(word,minimum = 1,start_depth = 0,edit_probabs = None):
         c,c_ = check_distance_trie(word, depth = start_depth,edit_distance = ed2,candidates = [])
         for i in range(len(trie_depth)-1):
             if c_ < minimum:
-                print("Entered depth, ",i+1)
+                #print("Entered depth, ",i+1)
                 c,c_ = check_distance_trie(word, depth = start_depth+i+1,edit_distance = ed2,candidates = c)
     
     #Filter 2 edit of type delete
