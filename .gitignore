@@ -2,3 +2,5 @@ venv/
 Literature/
 data/
 old/
+
+trie_depth.pickle
