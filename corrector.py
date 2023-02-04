@@ -100,6 +100,26 @@ def correctize_entire_knlm(sentence, model,p_lambda = 1,prior='bigram',trie = Fa
         
         return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
     
+    if prior = 'transformer':
+        candidate_probabilities = [transformer_probab(sent) for sent in candidate_sentences]
+        if likelihood=='default':
+            candidate_count = [len(_) for _ in candidates]  
+            sentences_probab_post=[(row*p_lambda) +
+                                   math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
+                                   for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
+        elif likelihood=='bm':
+            sentences_probab_post=[(row*p_lambda) + 
+                                    math.log(likelihood_bm(sentence,candidate_sentence)) 
+                                    for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
+            
+        sorted_index = numpy.argsort(sentences_probab_post)
+        sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
+        
+        return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
+        
+
+def transformer_probab(sent):
+    pass
 
 def correctize_with_window_knlm(sentence,model,window = 5,p_lambda = 1,prior = 'bigram',trie = False,likelihood = 'default'):
     '''

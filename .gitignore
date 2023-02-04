@@ -8,5 +8,6 @@ data/compiled.txt
 old/
 
 models/saved_model_knlm2
+models/transformer_model.pt
 
 trie_depth.pickle
