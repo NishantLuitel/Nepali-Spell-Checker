@@ -4,6 +4,7 @@ import regex as re
 import math
 import itertools
 import numpy
+from transformer import transformer_probab
 
 
 
@@ -20,6 +21,7 @@ def words_bigram(text):
                                 (r'\b[\u0900-\u097F]+\s[\u0900-\u097F]+',text.lower(), overlapped=True)]
     
     
+    
 def logprob(ngram,model,minimum):
     '''
     Calculate log probability
@@ -29,6 +31,13 @@ def logprob(ngram,model,minimum):
     if ngram in model.lm[0]:
         return model.lm[0][ngram]
     return minimum
+
+
+
+
+
+
+
     
     
 def likelihood_bm(sentence,candidate_sentence):
@@ -59,6 +68,50 @@ def constant_distributive_likelihood(sentence,candidate_sentence,candidate_count
             prod*= (1-alpha)/N
         i+=1
     return prod
+
+
+
+
+def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie = False,likelihood = 'default'):
+    
+    tokens = words(sentence)
+
+    candidates = []    
+    for _ in tokens:
+        candidates.append(final_candidate_words(_,use_trie = trie))
+    
+   
+    candidate_sentences = list(itertools.product(*candidates))
+    
+    print(len(candidate_sentences))
+    if prior == 'transformer':
+               
+        
+        print("In candidate_probabilities...")
+        candidate_probabilities = [transformer_probab([' '.join(sent)]) for sent in candidate_sentences]
+        print("Done...")
+        
+        if likelihood=='default':
+            candidate_count = [len(_) for _ in candidates]  
+            sentences_probab_post=[(row*p_lambda) +
+                                   math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
+                                   for row,candidate_sentence in zip(candidate_probabilities,candidate_sentences)]
+        elif likelihood=='bm':
+            sentences_probab_post=[(row*p_lambda) + 
+                                    math.log(likelihood_bm(sentence,candidate_sentence)) 
+                                    for row,candidate_sentence in zip(candidate_probabilities,candidate_sentences)]
+            
+        sorted_index = numpy.argsort(sentences_probab_post)
+        sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
+        
+        return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
+        
+
+
+
+
+
+
 
 def correctize_entire_knlm(sentence, model,p_lambda = 1,prior='bigram',trie = False,likelihood = 'default'):
     "Corrects the given 'sentence' using minimum edit"
@@ -100,26 +153,6 @@ def correctize_entire_knlm(sentence, model,p_lambda = 1,prior='bigram',trie = Fa
         
         return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
     
-    if prior = 'transformer':
-        candidate_probabilities = [transformer_probab(sent) for sent in candidate_sentences]
-        if likelihood=='default':
-            candidate_count = [len(_) for _ in candidates]  
-            sentences_probab_post=[(row*p_lambda) +
-                                   math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
-                                   for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
-        elif likelihood=='bm':
-            sentences_probab_post=[(row*p_lambda) + 
-                                    math.log(likelihood_bm(sentence,candidate_sentence)) 
-                                    for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
-            
-        sorted_index = numpy.argsort(sentences_probab_post)
-        sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
-        
-        return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
-        
-
-def transformer_probab(sent):
-    pass
 
 def correctize_with_window_knlm(sentence,model,window = 5,p_lambda = 1,prior = 'bigram',trie = False,likelihood = 'default'):
     '''
@@ -138,18 +171,40 @@ def correctize_with_window_knlm(sentence,model,window = 5,p_lambda = 1,prior = '
             d = correctize_entire_knlm(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
             corrects.append(d)
         return corrects
+
+def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'transformer',trie = False,likelihood = 'default'):
+    '''
     
+    '''   
     
-def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,likelihood = 'default'):
-    d = correctize_with_window_knlm(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood)
-    window_candidates = []
-    window_probab = []
-    for window in d:
-        maxim = min(len(window[0]),10)
-        top_candidates = window[0][:maxim]
-        window_candidates.append(top_candidates)
-        window_probab.append(window[1][:maxim])
-    return window_candidates,window_probab
+    tokens = words(sentence)
+    if len(tokens) <= window:
+        return correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+    else:
+        windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
+        remaining = (window-1)*len(windows)
+        windows.append(tokens[remaining:])
+        corrects = []
+        for _ in windows:
+            d = correctize_entire_nn(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+            corrects.append(d)
+        return corrects
+    
+def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type ='knlm' ,likelihood = 'default'):
+    
+    if model_type =='knlm':
+        d = correctize_with_window_knlm(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood)
+        window_candidates = []
+        window_probab = []
+        for window in d:
+            maxim = min(len(window[0]),10)
+            top_candidates = window[0][:maxim]
+            window_candidates.append(top_candidates)
+            window_probab.append(window[1][:maxim])
+        return window_candidates,window_probab
+    
+    if model_type == 'transformer':
+        pass
         
     
 def extract_choices(sample_sentences,model,p_lambda = 1,trie = False,likelihood = 'default'):
