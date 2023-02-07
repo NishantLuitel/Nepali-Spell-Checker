@@ -4,7 +4,10 @@ import regex as re
 import math
 import itertools
 import numpy
-from transformer import transformer_probab
+from transformer import transformer_probab,transformer_probab_list
+from torch import tensor
+import torch
+# import tensor
 
 
 
@@ -31,13 +34,6 @@ def logprob(ngram,model,minimum):
     if ngram in model.lm[0]:
         return model.lm[0][ngram]
     return minimum
-
-
-
-
-
-
-
     
     
 def likelihood_bm(sentence,candidate_sentence):
@@ -77,34 +73,42 @@ def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie =
     tokens = words(sentence)
 
     candidates = []    
+    
+    #Forcing to limit the number of candidate sentences
     for _ in tokens:
-        candidates.append(final_candidate_words(_,use_trie = trie))
+        candidates.append(final_candidate_words(_,use_trie = trie,force = True))
     
-   
-    candidate_sentences = list(itertools.product(*candidates))
     
-    print(len(candidate_sentences))
+#     candidate_sentences = list(itertools.product(*candidates))[:]
+
+    cs = list(itertools.product(*candidates))    
+    candidate_sentences = [' '.join(sent) for sent in cs]
+
     if prior == 'transformer':
                
         
         print("In candidate_probabilities...")
-        candidate_probabilities = [transformer_probab([' '.join(sent)]) for sent in candidate_sentences]
+#         candidate_probabilities = [transformer_probab([' '.join(sent)]) for sent in candidate_sentences]
+        candidate_probabilities = transformer_probab_list(candidate_sentences)
+        
         print("Done...")
         
         if likelihood=='default':
             candidate_count = [len(_) for _ in candidates]  
             sentences_probab_post=[(row*p_lambda) +
                                    math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
-                                   for row,candidate_sentence in zip(candidate_probabilities,candidate_sentences)]
+                                   for row,candidate_sentence in zip(candidate_probabilities,cs)]
         elif likelihood=='bm':
             sentences_probab_post=[(row*p_lambda) + 
                                     math.log(likelihood_bm(sentence,candidate_sentence)) 
-                                    for row,candidate_sentence in zip(candidate_probabilities,candidate_sentences)]
+                                    for row,candidate_sentence in zip(candidate_probabilities,cs)]
             
-        sorted_index = numpy.argsort(sentences_probab_post)
+#         sentences_probab_post.detach()
+#         print(type(sentences_probab_post),sentences_probab_post[0])
+        sorted_index = torch.argsort(torch.tensor(sentences_probab_post))
         sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
         
-        return [candidate_sentences[k] for k in sorted_index[::-1]],sentences_probab_post_sorted
+        return [candidate_sentences[int(k)].split() for k in torch.flip(sorted_index,dims=(0,))],sentences_probab_post_sorted
         
 
 
@@ -204,15 +208,25 @@ def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type 
         return window_candidates,window_probab
     
     if model_type == 'transformer':
-        pass
+        d = correctize_with_window_nn(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood)
+        window_candidates = []
+        window_probab = []
+        for window in d:
+            maxim = min(len(window[0]),10)
+            top_candidates = window[0][:maxim]
+            window_candidates.append(top_candidates)
+            window_probab.append(window[1][:maxim])
+        return window_candidates,window_probab
+        
         
     
-def extract_choices(sample_sentences,model,p_lambda = 1,trie = False,likelihood = 'default'):
+def extract_choices(sample_sentences,model,p_lambda = 1,trie = False,likelihood = 'default',model_type = 'knlm'):
     
-    wc,wp = return_choices2(sample_sentences,model,p_lambda = p_lambda,trie = trie ,likelihood = likelihood)
+    
+    wc,wp = return_choices2(sample_sentences,model,p_lambda = p_lambda,trie = trie ,model_type = model_type,likelihood = likelihood)
 #     choices_list=[set() for i in range(len(sample_sentences.split())+1)]
     choices_list=[[] for i in range(len(sample_sentences.split())+1)]
-    print(len(choices_list))
+#     print(len(choices_list))
 
     const = 0
     for _ in wc:

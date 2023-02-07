@@ -132,32 +132,259 @@ def generate_square_subsequent_mask(sz: int) -> Tensor:
 
 lnsoftmax = nn.LogSoftmax(dim=2)
 
+
+
 bptt = 35
 def probability(sent: Tensor):
     model.eval()
     src_mask = generate_square_subsequent_mask(bptt).to(device)
     
     prob = 0
-    for i in range(sent.shape[0]-1):
+#     for i in range(sent.shape[0]-1):
 #         print('i:', i)
-        batch_size = i+1
-        if batch_size != bptt:
-            src_mask_ = src_mask[:batch_size, :batch_size]
-        else:
-            src_mask_ = src_mask[:,:]
-        output_softmax = lnsoftmax(model(sent[:i+1,:], src_mask_))
+#         batch_size = i+1
+    batch_size = min(bptt,len(sent))
+    if batch_size != bptt:
+        src_mask_ = src_mask[:batch_size, :batch_size]
+    else:
+        src_mask_ = src_mask[:,:]
+#         output_softmax = lnsoftmax(model(sent[:i+1,:], src_mask_))
+    output_softmax = lnsoftmax(model(sent, src_mask_))
+    minimum_tensor,_ = torch.min(output_softmax, dim = 2,keepdim=True)
 
+#     print(output_softmax.shape)
+    dummy = torch.cat((output_softmax,minimum_tensor),dim = 2)
+#     print(dummy.shape)
 #         print(output_softmax_permuted,output_softmax_permuted[0,i,sent[i+1,0]],output_softmax_permuted.max())
-        #Index for maximum probability word
+    #Index for maximum probability word
 #         indices = torch.argmax(output_softmax_permuted, dim=2)
-        
-        #Max probability word
+
+    #Max probability word
 #         print('next word: ', [vocab.lookup_tokens(list(index))
 #                                   for index in indices][0][-1])
-        
-        prob+= float(output_softmax[i,0,sent[i+1,0]])
+#     print(output_softmax.shape)
+
+    l = sent[1:,:].squeeze(1)
+    print(l)
+    for n,i in enumerate(l):
+        if i == 0:
+            l[n] = torch.tensor(output_softmax.shape[2])
+    out_probab = torch.index_select(dummy,2,l)
+#     print(out_probab.shape)
+    for i in range(len(out_probab)-1):
+        prob += float(out_probab[i,0,i])
+#         prob+= float(output_softmax[i,0,sent[i+1,0]])
+                         
     return prob
 
+
+
+def probability_list(sents: Tensor):
+    model.eval()
+    src_mask = generate_square_subsequent_mask(bptt).to(device)
+    
+    prob = torch.zeros(sents.shape[1])
+    batch_size = min(bptt,sents.shape[0])
+#     bs = min(len(sents),64)
+    if batch_size != bptt:
+        src_mask_ = src_mask[:batch_size, :batch_size]
+    else:
+        src_mask_ = src_mask[:,:]
+#         output_softmax = lnsoftmax(model(sent[:i+1,:], src_mask_))
+
+#     sents = sents.permute(1,0,2)
+    output_softmax = lnsoftmax(model(sents.to(device), src_mask_))
+    minimum_tensor,_ = torch.min(output_softmax, dim = 2,keepdim=True)
+
+#     print(output_softmax.shape)
+    dummy = torch.cat((output_softmax,minimum_tensor),dim = 2)
+#     print(dummy.shape)
+
+    l = sents[1:,:]
+#     print("Printing..")
+#     print(l)
+    
+    for l_temp in l:
+        for n,i in enumerate(l_temp):
+            if i == 0:
+                l_temp[n] = torch.tensor(output_softmax.shape[2])
+#     print(l.T.shape)
+    
+#     print(dummy.shape)
+    out_probab = torch.stack([torch.index_select(dummy,2,l_temp.to(device)) for l_temp in l.T])
+#     print(out_probab)
+
+#     print(out_probab.shape)
+#     print(out_probab.shape)
+    for i in range(len(out_probab)):
+        for j in range(dummy.shape[0]-1):
+            prob[i] += out_probab[i,j,i,j].to('cpu')
+                         
+    return prob
+
+
+
+b = 64
+def probability_list2(sents: Tensor):
+    model.eval()
+    src_mask = generate_square_subsequent_mask(bptt)
+    
+    
+    batch_size = min(bptt,sents.shape[0])
+    bs = min(sents.shape[1],b)
+    prob_src = torch.zeros(b)
+    prob_ = torch.zeros(1).to(device)
+    
+    if sents.shape[1]%bs == 0:
+        loops = sents.shape[1]//bs
+#         print(loops)
+    else:
+        
+        loops = sents.shape[1]//bs+1
+#         print(loops)
+    
+    
+    with torch.no_grad():
+        for loop in range(loops):
+            torch.cuda.empty_cache()
+            if batch_size != bptt:
+                src_mask_ = src_mask[:batch_size, :batch_size]
+            else:
+                src_mask_ = src_mask[:,:]
+                
+            if loop != loops-1:
+                s = sents[:,loop*bs:(loop+1)*bs]
+                output_softmax = lnsoftmax(model(s.to(device), src_mask_.to(device)))
+                l = s[1:].to(device)
+                prob = torch.zeros(bs).to(device)
+            else:
+                s  = sents[:,loop*bs:]
+                output_softmax = lnsoftmax(model(s.to(device), src_mask_.to(device)))
+                l = s[1:].to(device)
+                prob = torch.zeros(len(l[0])).to(device)
+
+            minimum_tensor,_ = torch.min(output_softmax, dim = 2,keepdim=True)
+
+        #     print(output_softmax.shape)
+            dummy = torch.cat((output_softmax,minimum_tensor),dim = 2)
+        #     print(dummy.shape)
+
+
+        #     print("Printing..")
+        #     print(l)
+
+#             for l_temp in l:
+#                 for n,i in enumerate(l_temp):
+#                     if i == 0:
+#                         l_temp[n] = torch.tensor(output_softmax.shape[2])
+                        
+            l[l==0] = output_softmax.shape[2]
+        #     print(l.T.shape)
+
+        #     print(dummy.shape)
+            out_probab = torch.stack([torch.index_select(dummy,2,l_temp) for l_temp in l.T])
+        #     print(out_probab)
+
+        #     print(out_probab.shape)
+#             print(out_probab.shape)
+            for i in range(len(out_probab)):
+                for j in range(dummy.shape[0]-1):
+                    prob[i] += out_probab[i,j,i,j]
+            prob_ = torch.cat((prob_,prob),dim = 0)
+        
+        
+    del s,dummy,minimum_tensor,out_probab
+                         
+    return prob_[1:]
+
+
+
+def probability_list3(sents: Tensor):
+    
+    
+    model.eval()
+    src_mask = generate_square_subsequent_mask(bptt)
+    
+    
+    batch_size = min(bptt,sents.shape[0])
+    bs = min(sents.shape[1],b)
+#     prob_src = torch.zeros(b)
+    prob_ = torch.zeros(1).to(device)
+    
+    if sents.shape[1]%bs == 0:
+        loops = sents.shape[1]//bs
+        print(loops)
+    else:
+        
+        loops = sents.shape[1]//bs+1
+        print(loops)
+    
+    
+    with torch.no_grad():
+        for loop in range(loops):
+            torch.cuda.empty_cache()
+            if batch_size != bptt:
+                src_mask_ = src_mask[:batch_size, :batch_size]
+            else:
+                src_mask_ = src_mask[:,:]
+
+        #         output_softmax = lnsoftmax(model(sent[:i+1,:], src_mask_))
+
+        #     sents = sents.permute(1,0,2)
+            if loop != loops-1:
+                s = sents[:,loop*bs:(loop+1)*bs]
+                output_softmax = lnsoftmax(model(s.to(device), src_mask_.to(device)))
+                l = s[1:].to(device)
+#                 prob = torch.zeros(bs)
+            else:
+                s  = sents[:,loop*bs:]
+                output_softmax = lnsoftmax(model(s.to(device), src_mask_.to(device)))
+                l = s[1:].to(device)
+#                 prob = torch.zeros(len(l[0]))
+
+            minimum_tensor,_ = torch.min(output_softmax, dim = 2,keepdim=True)
+
+        #     print(output_softmax.shape)
+            dummy = torch.cat((output_softmax,minimum_tensor),dim = 2)
+        #     print(dummy.shape)
+
+
+        #     print("Printing..")
+        #     print(l)
+#             print(l)
+#             for l_temp in l:
+#                 for n,i in enumerate(l_temp):
+#                     if i == 0:
+#                         l_temp[n] = torch.tensor(output_softmax.shape[2])
+                        
+            l[l==0] = output_softmax.shape[2]
+                        
+#             print(l)
+        #     print(l.T.shape)
+
+        #     print(dummy.shape)
+            out_probab = torch.stack([torch.index_select(dummy,2,l_temp) for l_temp in l.T])
+        #     print(out_probab)
+
+#             print(out_probab.shape)
+#             print(out_probab)
+#             for i in range(len(out_probab)):
+#                 for j in range(dummy.shape[0]-1):
+#                     prob[i] += out_probab[i,j,i,j].to('cpu')
+#                     print("Up:",prob[i])
+                    
+#                 prob[i] = sum(torch.diagonal(out_probab[i,:-1,i,:].squeeze(0).squeeze(1)))
+            m = torch.diagonal(torch.sum(torch.diagonal(out_probab[:,:-1,:,:],dim1=1,dim2=3),dim=2)).to(device)
+#             print("m",m.shape,m)
+        
+#                 print(prob[i])
+#             prob_ = torch.cat((prob_,prob),dim = 0)
+            prob_ = torch.cat((prob_,m),dim = 0)
+        
+        
+    del s,dummy,minimum_tensor,out_probab
+                         
+    return prob_[1:]
 
 def transformer_probab(sentence,device = device):
     '''
@@ -170,6 +397,29 @@ def transformer_probab(sentence,device = device):
     return probability(sentence_tensor)
 
 
+
+def preprocess_list(sentences,device = device):
+    '''
+    Convert sentence into tensor of indices taken from vocabulary
+    
+    '''
+    length = len(sentences)
+#     st_i = torch.stack([data_process(sent) for sent in sentences]).to(device) 
+    st_i = data_process(sentences).reshape(length,-1).T
+#     st_i = st_i.squeeze(0)   
+    return st_i
+
+
+
+def transformer_probab_list(sentence_list,device = device):
+    
+    
+    sentence_tensor = preprocess_list(sentence_list,device = device)
+    
+    return probability_list3(sentence_tensor)
+    
+
+    
 
 
 

@@ -36,7 +36,7 @@ def check_distance2(w, depth = 1,edit_distance = 2):
     candidates = list(filter(lambda word:textdistance.levenshtein.distance(w, word) <= edit_distance,words))        
     return (candidates,len(candidates))
 
-def phonetic_distance(word,word_list,top = 5,include_metaphone = False):
+def phonetic_distance(word,word_list,top = 5,force = False,include_metaphone = False):
     english_text = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.ITRANS)
     m = []
     m1 = doublemetaphone(english_text)
@@ -52,11 +52,13 @@ def phonetic_distance(word,word_list,top = 5,include_metaphone = False):
         #m.append(textdistance.sorensen_dice(english_text.lower(),english_text2.lower()))        
     sorted_list = list(sorted(zip(m,word_list)))
     top_list = [x for _,x in sorted_list]
-    if len(top_list)<top:
+    if len(top_list)<=top:
         return_list = top_list
     else:
         top_dis = sorted_list[top-1][0]
         return_list = [x for _,x in sorted_list if _<=top_dis ]
+        if force == True:
+            return return_list[:5]
     return return_list
     
     
@@ -129,7 +131,7 @@ def candidate_words_trie(word,minimum = 1,start_depth = 0,edit_probabs = None):
     return c
 
 
-def final_candidate_words(word,minimum =1,top = 5,start_depth =0 ,use_trie = False,time = False):
+def final_candidate_words(word,minimum =1,top = 5,start_depth =0,force = False ,use_trie = False,time = False):
     
     if time:
         import time
@@ -149,4 +151,4 @@ def final_candidate_words(word,minimum =1,top = 5,start_depth =0 ,use_trie = Fal
             e = time.time()
             print("time passed fc: ",e-s)
             print(phonetic_distance(word,c,top = top))
-        return phonetic_distance(word,c,top = top)
+        return phonetic_distance(word,c,top = top,force = force)
