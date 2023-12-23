@@ -4,7 +4,7 @@ import regex as re
 import math
 import itertools
 import numpy
-from transformer import transformer_probab,transformer_probab_list
+from transformer import transformer_probab,transformer_probab_list,transformer_probab_final_word
 from torch import tensor
 import torch
 # import tensor
@@ -47,6 +47,14 @@ def likelihood_bm(sentence,candidate_sentence):
     prod = 1
     for word,candidate_word in zip(sentence.split(),candidate_sentence):          
         prod*= bma.likelihood(word,candidate_word)
+        #print("prod:",prod)
+    return prod
+
+
+def likelihood_bm_word(word, candidate_word):
+    
+    prod = bma.likelihood(word, candidate_word)
+    print("Prod:",candidate_word, math.log(prod))
     return prod
 
 
@@ -83,6 +91,7 @@ def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie =
 
     cs = list(itertools.product(*candidates))    
     candidate_sentences = [' '.join(sent) for sent in cs]
+    print("Length of candidates:",len(candidate_sentences))
 
     if prior == 'transformer':
                
@@ -111,11 +120,103 @@ def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie =
         return [candidate_sentences[int(k)].split() for k in torch.flip(sorted_index,dims=(0,))],sentences_probab_post_sorted
         
 
+def correctize_entire_nn_(sentence, model,p_lambda = 1,prior='transformer',trie = False,likelihood = 'default'):
+    
+    tokens = words(sentence)
+
+    candidates = []    
+    
+    #Forcing to limit the number of candidate sentences
+    for _ in tokens:
+        candidates.append(final_candidate_words(_,use_trie = trie,force = True))
+        break
+    print(len(candidates[0]))
+    
+#     candidate_sentences = list(itertools.product(*candidates))[:]
+
+#    cs = list(itertools.product(*candidates))    
+#    candidate_sentences = [' '.join(sent) for sent in cs]
+
+    if prior == 'transformer':
+               
+        
+       # print("In candidate_probabilities...")
+#         candidate_probabilities = [transformer_probab([' '.join(sent)]) for sent in candidate_sentences]
+        candidate_probabilities = transformer_probab_list(candidate_sentences)
+        
+        print("Done...")
+        
+        if likelihood=='default':
+            candidate_count = [len(_) for _ in candidates]  
+            sentences_probab_post=[(row*p_lambda) +
+                                   math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
+                                   for row,candidate_sentence in zip(candidate_probabilities,cs)]
+        elif likelihood=='bm':
+            sentences_probab_post=[(row*p_lambda) + 
+                                    math.log(likelihood_bm(sentence,candidate_sentence)) 
+                                    for row,candidate_sentence in zip(candidate_probabilities,cs)]
+            
+#         sentences_probab_post.detach()
+#         print(type(sentences_probab_post),sentences_probab_post[0])
+        sorted_index = torch.argsort(torch.tensor(sentences_probab_post))
+        sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
+        
+        return [candidate_sentences[int(k)].split() for k in torch.flip(sorted_index,dims=(0,))],sentences_probab_post_sorted
+        
 
 
+def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 2):
+# Attempts to correct only final word of the given sentence
+
+    tokens = words(sentence)
+    final_token = tokens[-1]
+    candidates = []
+    
+    print(tokens)
+    #Append the candidates of the final word
+    candidates.append(final_candidate_words(tokens[-1],use_trie = trie,force = True))
+    
+    print(candidates)
+    
+    if len(tokens) > 1 and len(candidates[0])>1:
+        candidate_probab = transformer_probab_final_word([sentence],candidates = candidates)
+        
+        if likelihood=='default':
+            candidate_count = [len(_) for _ in candidates[0]]  
+            sentences_probab_post=[(row*p_lambda) +
+                                   (math.log(constant_distributive_likelihood(final_token,candidate_token,candidate_count))*l_lambda) 
+                                   for row,candidate_token in zip(candidate_probab,candidates[0])]
+        elif likelihood=='bm':
+            sentences_probab_post=[(row*p_lambda) + 
+                                    (math.log(likelihood_bm_word(final_token,candidate_token))*l_lambda) 
+                                    for row,candidate_token in zip(candidate_probab,candidates[0])]
+        # Evaluate the probabilies of the final word given context
+        
+        
+        sorted_indices_desc = sorted(range(len(sentences_probab_post)), key=lambda k: sentences_probab_post[k], reverse=True)
+        
+        return_candidates = [candidates[0][i] for i in sorted_indices_desc]
+        print(candidates, sentences_probab_post,return_candidates)
+        
+        if len(return_candidates)>top:
+            return return_candidates[:top]
+        
+        return return_candidates
+     
+    return (candidates[0])
 
 
-
+def extract_choices_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 6):
+    all_candidates = []
+    tokens = words(sentence)
+    
+    
+    for i in range(len(tokens)):
+        c = correct_current_word(sentence = ' '.join(tokens[:i+1]),model = model,p_lambda = p_lambda,l_lambda = l_lambda,prior=prior,trie = trie,likelihood =likelihood,top = top)
+        all_candidates.append(c)
+        
+    return all_candidates
+       
 
 def correctize_entire_knlm(sentence, model,p_lambda = 1,prior='bigram',trie = False,likelihood = 'default'):
     "Corrects the given 'sentence' using minimum edit"
@@ -165,7 +266,7 @@ def correctize_with_window_knlm(sentence,model,window = 5,p_lambda = 1,prior = '
     
     tokens = words(sentence)
     if len(tokens) <= window:
-        return correctize_entire_knlm(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+        return [correctize_entire_knlm(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)]
     else:
         windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
         remaining = (window-1)*len(windows)
@@ -183,7 +284,8 @@ def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'tr
     
     tokens = words(sentence)
     if len(tokens) <= window:
-        return correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+#         print(correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood))
+        return [correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)]
     else:
         windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
         remaining = (window-1)*len(windows)
@@ -192,7 +294,53 @@ def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'tr
         for _ in windows:
             d = correctize_entire_nn(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
             corrects.append(d)
+#         print(corrects)
         return corrects
+    
+    
+def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'transformer',trie = False,likelihood = 'default'):
+    '''
+    
+    '''   
+    
+    tokens = words(sentence)
+    if len(tokens) <= window:
+#         print(correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood))
+        return [correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)]
+    else:
+        windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
+        remaining = (window-1)*len(windows)
+        windows.append(tokens[remaining:])
+        corrects = []
+        for _ in windows:
+            d = correctize_entire_nn(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+            corrects.append(d)
+#         print(corrects)
+        return corrects
+
+
+
+def correctize_with_window_nn_(sentence, model, window = 5,p_lambda = 1,prior = 'transformer',trie = False,likelihood = 'default'):
+    '''
+    
+    '''   
+    
+    tokens = words(sentence)
+    if len(tokens) <= window:
+#         print(correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood))
+        return [correctize_entire_nn_(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)]
+    else:
+        windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
+        remaining = (window-1)*len(windows)
+        windows.append(tokens[remaining:])
+        corrects = []
+        for _ in windows:
+            d = correctize_entire_nn_(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+            corrects.append(d)
+#         print(corrects)
+        return corrects
+    
+    
     
 def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type ='knlm' ,likelihood = 'default'):
     

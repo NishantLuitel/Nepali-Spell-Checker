@@ -165,7 +165,7 @@ def probability(sent: Tensor):
 #     print(output_softmax.shape)
 
     l = sent[1:,:].squeeze(1)
-    print(l)
+#    print(l)
     for n,i in enumerate(l):
         if i == 0:
             l[n] = torch.tensor(output_softmax.shape[2])
@@ -417,6 +417,54 @@ def transformer_probab_list(sentence_list,device = device):
     sentence_tensor = preprocess_list(sentence_list,device = device)
     
     return probability_list3(sentence_tensor)
+
+
+def transformer_probab_final_word(sentence_list, candidates=[], device = device):
+    
+    sentence_tensor = preprocess_list(sentence_list,device = device)[:-1].to(device)
+    print("Sentence tensor:",sentence_tensor)
+    
+    candidate_sti = preprocess_list([' '.join(candidates[0])]).squeeze(1)
+    print(candidate_sti)
+    
+    model.eval()
+    src_mask = generate_square_subsequent_mask(bptt).to(device)
+    
+    prob = 0
+    batch_size = min(bptt,len(sentence_tensor))
+    if batch_size != bptt:
+        src_mask_ = src_mask[:batch_size, :batch_size]
+    else:
+        src_mask_ = src_mask[:,:]
+    output_softmax = lnsoftmax(model(sentence_tensor, src_mask_))
+    print(output_softmax,output_softmax.shape,output_softmax.shape[0])
+    prediction_token = output_softmax[-1].squeeze(0)
+    print(prediction_token[candidate_sti])
+    
+    
+    print(candidate_sti)
+    if 0 in candidate_sti:
+        print('true')
+        prediction_token[0] = torch.min(prediction_token)
+    
+    
+    selected_candidates_log_probab = prediction_token[candidate_sti]
+    print(torch.argsort(prediction_token))
+    
+    sorted_indices_desc = torch.argsort(selected_candidates_log_probab, descending=True)
+    print(sorted_indices_desc)
+    
+    print(vocab.lookup_token(7752),vocab.lookup_token(4418),vocab.lookup_token(2177),vocab.lookup_token(2067))
+    
+    return_candidates = [candidates[0][i] for i in sorted_indices_desc]
+    print(return_candidates)
+    
+    return selected_candidates_log_probab.to('cpu')
+
+    
+    
+    
+    
     
 
     

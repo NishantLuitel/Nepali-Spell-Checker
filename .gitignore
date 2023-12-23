@@ -6,6 +6,7 @@ data/saved_words_counter3
 data/saved_model_knlm2
 data/compiled.txt
 old/
+.ipynb_checkpoints/
 
 models/saved_model_knlm2
 models/transformer_model.pt
