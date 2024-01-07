@@ -1,11 +1,12 @@
 from collections import defaultdict
 class BrillMoreAcc:
+    
+    
     '''
     This class assumes that every word has error probability depending on it's length
     
     '''
-    
-    
+       
     def __init__(self, N=2, max_candidates=10):
          
         self.N = N
@@ -46,6 +47,9 @@ class BrillMoreAcc:
             if a != b:
                 edits.append((a,b))
         return edits
+    
+    def probability_error(self, alignment):
+        
     
     
     
@@ -130,6 +134,8 @@ class BrillMoreAcc:
             alignments.append((None, w[j - 1]))
             j -= 1
         return alignments[::-1]   
+    
+    
     
 class BrillMore:
     """

@@ -15,9 +15,20 @@ def words(text):
     text = re.sub(r'[\u0964]', r'\u0020\u0964\u0020', text)
     return re.findall(r'[\u0900-\u097F]+', text.lower())
 
-with open('models/bma.pickle','rb') as f:
+with open('models/bma_27dec.pickle','rb') as f:
     bma = pickle.load(f)
+    
+with open('data/name_with_additive.pk','rb') as f:
+    name_with_additive = pickle.load(f)
+ 
+with open('data/all_token2.pk','rb') as f:
+    all_token2 = pickle.load(f)
 
+with open('data/lexicon$.pk','rb') as f:
+    lexicon_dict = pickle.load(f)
+    
+final_lexicon_dict = list(set(name_with_additive + all_token2 + lexicon_dict))
+    
 def words_bigram(text):   
     text = re.sub(r'[\u0964]', r'\u0020\u0964\u0020', text)
     return [tuple(x.split()) for x in re.findall
@@ -165,7 +176,7 @@ def correctize_entire_nn_(sentence, model,p_lambda = 1,prior='transformer',trie 
         
 
 
-def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 2):
+def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 2,return_prob = False):
 # Attempts to correct only final word of the given sentence
 
     tokens = words(sentence)
@@ -187,15 +198,17 @@ def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transf
                                    (math.log(constant_distributive_likelihood(final_token,candidate_token,candidate_count))*l_lambda) 
                                    for row,candidate_token in zip(candidate_probab,candidates[0])]
         elif likelihood=='bm':
+            modifier_probab_dict = {w:(-1.5 if (w not in final_lexicon_dict) else 1.0) for p,w in zip(candidate_probab,candidates[0])}
+            print(modifier_probab_dict)
             sentences_probab_post=[(row*p_lambda) + 
-                                    (math.log(likelihood_bm_word(final_token,candidate_token))*l_lambda) 
+                                    modifier_probab_dict[candidate_token]+ math.log(likelihood_bm_word(final_token,candidate_token))*l_lambda
                                     for row,candidate_token in zip(candidate_probab,candidates[0])]
         # Evaluate the probabilies of the final word given context
         
         
         sorted_indices_desc = sorted(range(len(sentences_probab_post)), key=lambda k: sentences_probab_post[k], reverse=True)
         
-        return_candidates = [candidates[0][i] for i in sorted_indices_desc]
+        return_candidates = [candidates[0][i] if return_prob==False else (candidates[0][i], sentences_probab_post[i])for n,i in enumerate(sorted_indices_desc)]
         print(candidates, sentences_probab_post,return_candidates)
         
         if len(return_candidates)>top:
@@ -203,6 +216,7 @@ def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transf
         
         return return_candidates
      
+    
     return (candidates[0])
 
 
@@ -212,7 +226,29 @@ def extract_choices_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transf
     
     
     for i in range(len(tokens)):
-        c = correct_current_word(sentence = ' '.join(tokens[:i+1]),model = model,p_lambda = p_lambda,l_lambda = l_lambda,prior=prior,trie = trie,likelihood =likelihood,top = top)
+        c = correct_current_word(sentence = ' '.join(tokens[:i+1]),model = model,p_lambda = p_lambda,l_lambda = l_lambda,prior=prior,trie = trie,likelihood =likelihood,top = top,return_prob = False)
+        all_candidates.append(c)
+        
+    return all_candidates
+
+def autocorrect_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 6):
+    all_candidates = []
+    tokens = words(sentence)
+    
+    
+    for i in range(len(tokens)):
+        s = tokens[:i+1]
+        c = correct_current_word(sentence = ' '.join(tokens[:i+1]),model = model,p_lambda = p_lambda,l_lambda = l_lambda,prior=prior,trie = trie,likelihood =likelihood,top = top,return_prob = True)
+        
+        if len(c) > 1 and type(c[0]) != str :
+            temp = [c[0][0]]
+            tokens[i] = c[0][0]
+            for w in range(len(c)-1):
+                if c[0][1] - c[w+1][1] < 2.00:
+                    temp.append(c[w+1])
+                    
+            all_candidates.append(temp)
+            continue
         all_candidates.append(c)
         
     return all_candidates

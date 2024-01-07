@@ -437,24 +437,24 @@ def transformer_probab_final_word(sentence_list, candidates=[], device = device)
     else:
         src_mask_ = src_mask[:,:]
     output_softmax = lnsoftmax(model(sentence_tensor, src_mask_))
-    print(output_softmax,output_softmax.shape,output_softmax.shape[0])
+    #print(output_softmax,output_softmax.shape,output_softmax.shape[0])
     prediction_token = output_softmax[-1].squeeze(0)
-    print(prediction_token[candidate_sti])
+    #print(prediction_token[candidate_sti])
     
     
-    print(candidate_sti)
+    #print(candidate_sti)
     if 0 in candidate_sti:
-        print('true')
+        #print('true')
         prediction_token[0] = torch.min(prediction_token)
     
     
     selected_candidates_log_probab = prediction_token[candidate_sti]
-    print(torch.argsort(prediction_token))
+    #print(torch.argsort(prediction_token))
     
     sorted_indices_desc = torch.argsort(selected_candidates_log_probab, descending=True)
-    print(sorted_indices_desc)
+    #print(sorted_indices_desc)
     
-    print(vocab.lookup_token(7752),vocab.lookup_token(4418),vocab.lookup_token(2177),vocab.lookup_token(2067))
+    #print(vocab.lookup_token(7752),vocab.lookup_token(4418),vocab.lookup_token(2177),vocab.lookup_token(2067))
     
     return_candidates = [candidates[0][i] for i in sorted_indices_desc]
     print(return_candidates)
