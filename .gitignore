@@ -15,7 +15,7 @@ data/nep_dict.sqlite3
 data/sabdkosh-2075-10th.txt
 data/sabdkosh-2075-10th.pdf
 data/ne_dedup.txt/
-experiments/
+experiments/NepaliBERT/
 temp/
 checker/data/nep_dict.sqlite3
 old/
