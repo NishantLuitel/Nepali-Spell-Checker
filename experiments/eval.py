@@ -32,7 +32,7 @@ def WER(correct_tokens,predicted_tokens):
             if c!=p:
                 errors+=1
 #                 print(errors)
-        return errors/total
+        return round(errors/total,3)
 
 def word_accuracy(correct_tokens,predicted_tokens,error_tokens):
     '''
@@ -56,7 +56,7 @@ def word_accuracy(correct_tokens,predicted_tokens,error_tokens):
                 if c==p:
                     corrected+=1
 #                 print(errors)
-        return (corrected/errors,corrected,errors)    
+        return (round(corrected/errors,3),corrected,errors)    
 
 align = BrillMore().align
 def char_accuracy(correct_tokens,predicted_tokens,error_tokens):
@@ -85,4 +85,4 @@ def char_accuracy(correct_tokens,predicted_tokens,error_tokens):
                 corrected += abs(sum([True if ((t[0]!=t[1]) or (None in t)) else False for t in alignment2])-e)
 #                 print(e,corrected)
 
-        return corrected/errors,corrected,errors
+        return round(corrected/errors,3),corrected,errors
