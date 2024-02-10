@@ -40,27 +40,16 @@ The following code performs an ablation study using the BM model for 323 sentenc
 python experiments/exp.py --ablation -l Trans -e bm --num 323
 ```
 
-# Command Line Options:
-
+# Further Command Line Options:
 Options:
-  -h, --help            show this help message and exit
-  --ablation, --Ablation
-                        perform ablation study
-  -l LM, --LM=LM        set the variant of the language model to evaluate with
-                        options: knlm, NepaliBert,dBerta, Trans and Trans-word
-  -e EM, --error_model=EM
-                        select an error model to train with option: 'cd' for
-                        constant distributive and 'bm' for Brill and Moore
-                        version
-  -f EVAL_FILE, --file=EVAL_FILE
-                        set the filename for evaluation
-  --num=NUM, --number=NUM
-                        set the number of sentences to perform evaluation over
-                        default: 400 or max
-  --lda=P_LAMDA, --lambda=P_LAMDA
-                        sets the weighting factor for the language model(prior)
-                        default:1.0
-  --trie, --Trie        set this to make use of an efficient Trie data
-                        structure during candidate selection
+- `-h, --help`: Show this help message and exit.
+- `--ablation, --Ablation`: Perform ablation study.
+- `-l LM, --LM=LM`: Set the variant of language model to evaluate with. Options: `knlm`, `NepaliBert`, `dBerta`, `Trans`, and `Trans-word`.
+- `-e EM, --error_model=EM`: Select an error model to train with. Options: `'cd'` for constant distributive and `'bm'` for Brill and Moore version.
+- `-f EVAL_FILE, --file=EVAL_FILE`: Set the filename for evaluation.
+- `--num=NUM, --number=NUM`: Set the number of sentences to perform evaluation over. Default: 400 or max.
+- `--lda=P_LAMDA, --lambda=P_LAMDA`: Sets the weighting factor for language model (prior). Default: 1.0.
+- `--trie, --Trie`: Set this to make use of an efficient Trie data structure during candidate selection.
+
 
 Note: Models Required for the project are uploaded here.
