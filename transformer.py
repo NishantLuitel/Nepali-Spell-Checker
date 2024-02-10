@@ -100,7 +100,8 @@ def try_gpu(i=0):
         return torch.device(f'cuda:{i}')
     return torch.device('cpu')
 
-device = try_gpu(0)
+# device = try_gpu(0)
+device = 'cpu'
 
 model = TransformerModel(params['ntokens'],params['emsize'],params['nhead'], params['d_hid'],params['nlayers'], params['dropout']).to(device)
 

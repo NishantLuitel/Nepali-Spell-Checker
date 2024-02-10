@@ -9,7 +9,11 @@ from torch import tensor
 import torch
 # import tensor
 
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 
+
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device ='cpu'
 
 def words(text): 
     text = re.sub(r'[\u0964]', r'\u0020\u0964\u0020', text)
@@ -29,7 +33,12 @@ with open('data/all_token2.pk','rb') as f:
 with open('data/lexicon$.pk','rb') as f:
     lexicon_dict = pickle.load(f)
     
-final_lexicon_dict = list(set(name_with_additive + all_token2 + lexicon_dict))
+# final_lexicon_dict = return_lexicon_dict()
+
+# with open(os.path.join(notebook_dir, '..','models','bma_27dec.pickle'),'rb') as f:
+#     bma = pickle.load(f)    
+
+final_lexicon_dict = list(set(all_token2 + lexicon_dict))
     
 def words_bigram(text):   
     text = re.sub(r'[\u0964]', r'\u0020\u0964\u0020', text)
@@ -50,16 +59,10 @@ def logprob(ngram,model,minimum):
     
     
 
-    
-    
-    
-    
-    
-
 def likelihood_bm_word(word, candidate_word):
     
     prod = bma.likelihood(word, candidate_word)
-    print("Prod:",candidate_word, math.log(prod))
+#     print("Prod:",candidate_word, math.log(prod))
     return prod
 
 
@@ -97,7 +100,7 @@ def constant_distributive_likelihood(sentence,candidate_sentence,candidate_count
 
 
 
-def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie = False,likelihood = 'default'):
+def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie = False,likelihood = 'default',ab=False):
     
     tokens = words(sentence)
 
@@ -112,29 +115,33 @@ def correctize_entire_nn(sentence, model,p_lambda = 1,prior='transformer',trie =
 
     cs = list(itertools.product(*candidates))    
     candidate_sentences = [' '.join(sent) for sent in cs]
-    print("Length of candidates:",len(candidate_sentences))
+#     print("Length of candidates:",len(candidate_sentences))
 
     if prior == 'transformer':
-               
-        
-        print("In candidate_probabilities...")
-#         candidate_probabilities = [transformer_probab([' '.join(sent)]) for sent in candidate_sentences]
+
         candidate_probabilities = transformer_probab_list(candidate_sentences)
         
-        print("Done...")
-        
-        if likelihood=='default':
-            candidate_count = [len(_) for _ in candidates]  
-            sentences_probab_post=[(row*p_lambda) +
-                                   math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
-                                   for row,candidate_sentence in zip(candidate_probabilities,cs)]
-        elif likelihood=='bm':
-            sentences_probab_post=[(row*p_lambda) + 
-                                    math.log(likelihood_bm(sentence,candidate_sentence)) 
-                                    for row,candidate_sentence in zip(candidate_probabilities,cs)]
-            
-#         sentences_probab_post.detach()
-#         print(type(sentences_probab_post),sentences_probab_post[0])
+        if not ab:
+            if likelihood=='default':
+                candidate_count = [len(_) for _ in candidates]  
+                sentences_probab_post=[(row*p_lambda) +
+                                       math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
+                                       for row,candidate_sentence in zip(candidate_probabilities,cs)]
+            elif likelihood=='bm':
+                sentences_probab_post=[(row*p_lambda) + 
+                                        math.log(likelihood_bm(sentence,candidate_sentence)) 
+                                        for row,candidate_sentence in zip(candidate_probabilities,cs)]
+        else: 
+
+            if likelihood=='default':
+                candidate_count = [len(_) for _ in candidates]  
+                modifier_probab = [sum([-1.5 if w not in final_lexicon_dict else 1.0 for w in c]) for c in cs]
+                sentences_probab_post=[mp+ math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
+                                       for candidate_sentence,mp in zip(cs,modifier_probab)]
+            elif likelihood=='bm':
+                modifier_probab = [sum([-1.5 if w not in final_lexicon_dict else 1.0 for w in c]) for c in cs]
+                sentences_probab_post=[mp + math.log(likelihood_bm(sentence,candidate_sentence)) 
+                                        for candidate_sentence,mp in zip(cs,modifier_probab)]
         sorted_index = torch.argsort(torch.tensor(sentences_probab_post))
         sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
         
@@ -186,40 +193,55 @@ def correctize_entire_nn_(sentence, model,p_lambda = 1,prior='transformer',trie 
         
 
 
-def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 2,return_prob = False):
+def correct_current_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 2,return_prob = False,ab=False):
 # Attempts to correct only final word of the given sentence
 
     tokens = words(sentence)
     final_token = tokens[-1]
     candidates = []
     
-    print(tokens)
+#     print(tokens)
     #Append the candidates of the final word
     candidates.append(final_candidate_words(tokens[-1],use_trie = trie,force = True))
     
-    print(candidates)
+#     print(candidates)
     
     if len(tokens) > 1 and len(candidates[0])>1:
         candidate_probab = transformer_probab_final_word([sentence],candidates = candidates)
         
-        if likelihood=='default':
-            candidate_count = [len(_) for _ in candidates[0]]  
-            sentences_probab_post=[(row*p_lambda) +
-                                   (math.log(constant_distributive_likelihood(final_token,candidate_token,candidate_count))*l_lambda) 
-                                   for row,candidate_token in zip(candidate_probab,candidates[0])]
-        elif likelihood=='bm':
-            modifier_probab_dict = {w:(-1.5 if (w not in final_lexicon_dict) else 1.0) for p,w in zip(candidate_probab,candidates[0])}
-            print(modifier_probab_dict)
-            sentences_probab_post=[(row*p_lambda) + 
-                                    modifier_probab_dict[candidate_token]+ math.log(likelihood_bm_word(final_token,candidate_token))*l_lambda
-                                    for row,candidate_token in zip(candidate_probab,candidates[0])]
+        if not ab:
+            if likelihood=='default':
+                candidate_count = [len(_) for _ in candidates[0]]  
+                sentences_probab_post=[(row*p_lambda) +
+                                       (math.log(constant_distributive_likelihood(final_token,candidate_token,candidate_count))*l_lambda) 
+                                       for row,candidate_token in zip(candidate_probab,candidates[0])]
+            elif likelihood=='bm':
+                modifier_probab_dict = {w:(-1.5 if (w not in final_lexicon_dict) else 1.0) for p,w in zip(candidate_probab,candidates[0])}
+    #             print(modifier_probab_dict)
+                sentences_probab_post=[(row*p_lambda) + 
+                                        modifier_probab_dict[candidate_token]+ math.log(likelihood_bm_word(final_token,candidate_token))*l_lambda
+                                        for row,candidate_token in zip(candidate_probab,candidates[0])]
+        
+        else: 
+            if likelihood =='bm':
+
+                modifier_probab_dict = {w:(-1.5 if (w not in final_lexicon_dict) else 1.0) for w in candidates[0]}
+                sentences_probab_post=[modifier_probab_dict[candidate_token]+math.log(likelihood_bm_word(final_token,candidate_token))*l_lambda
+                                        for candidate_token in candidates[0]]
+
+            elif likelihood =='default':
+
+                modifier_probab_dict = {w:(-1.5 if (w not in final_lexicon_dict) else 1.0) for w in candidates[0]}
+                candidate_count = len(candidates[0])
+                sentences_probab_post=[modifier_probab_dict[candidate_token]+math.log(constant_distributive_likelihood_word(final_token,candidate_token,candidate_count))*l_lambda
+                                        for candidate_token in candidates[0]]
         # Evaluate the probabilies of the final word given context
         
         
         sorted_indices_desc = sorted(range(len(sentences_probab_post)), key=lambda k: sentences_probab_post[k], reverse=True)
         
         return_candidates = [candidates[0][i] if return_prob==False else (candidates[0][i], sentences_probab_post[i])for n,i in enumerate(sorted_indices_desc)]
-        print(candidates, sentences_probab_post,return_candidates)
+#         print(candidates, sentences_probab_post,return_candidates)
         
         if len(return_candidates)>top:
             return return_candidates[:top]
@@ -241,14 +263,14 @@ def extract_choices_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transf
         
     return all_candidates
 
-def autocorrect_word(sentence, model,p_lambda = 1,l_lambda = 1,prior='transformer',trie = False,likelihood = 'default',top = 6):
+def autocorrect_word(sentence, model,p_lambda = 1,l_lambda = 1,model_type='transformer',trie = False,likelihood = 'default',top = 6,tokenizer=None,ab=False):
     all_candidates = []
     tokens = words(sentence)
     
     
     for i in range(len(tokens)):
         s = tokens[:i+1]
-        c = correct_current_word(sentence = ' '.join(tokens[:i+1]),model = model,p_lambda = p_lambda,l_lambda = l_lambda,prior=prior,trie = trie,likelihood =likelihood,top = top,return_prob = True)
+        c = correct_current_word(sentence = ' '.join(tokens[:i+1]),model = model,p_lambda = p_lambda,l_lambda = l_lambda,prior=model_type,trie = trie,likelihood =likelihood,top = top,return_prob = True,ab=ab)
         
         if len(c) > 1 and type(c[0]) != str :
             temp = [c[0][0]]
@@ -297,7 +319,6 @@ def correctize_entire_knlm(sentence, model,p_lambda = 1,prior='bigram',trie = Fa
                                     math.log(likelihood_bm(sentence,candidate_sentence)) 
                                     for row,candidate_sentence in zip(bi_token_probab,candidate_sentences)]
 
-
         
         sorted_index = numpy.argsort(sentences_probab_post)
         sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
@@ -344,7 +365,7 @@ def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'tr
         return corrects
     
     
-def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'transformer',trie = False,likelihood = 'default'):
+def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'transformer',trie = False,likelihood = 'default',ab=False):
     '''
     
     '''   
@@ -352,14 +373,14 @@ def correctize_with_window_nn(sentence,model,window = 5,p_lambda = 1,prior = 'tr
     tokens = words(sentence)
     if len(tokens) <= window:
 #         print(correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood))
-        return [correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)]
+        return [correctize_entire_nn(sentence,model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood,ab=ab)]
     else:
         windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
         remaining = (window-1)*len(windows)
         windows.append(tokens[remaining:])
         corrects = []
         for _ in windows:
-            d = correctize_entire_nn(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood)
+            d = correctize_entire_nn(' '.join(_),model,p_lambda=p_lambda,prior = prior,trie = trie,likelihood = likelihood,ab=ab)
             corrects.append(d)
 #         print(corrects)
         return corrects
@@ -386,9 +407,82 @@ def correctize_with_window_nn_(sentence, model, window = 5,p_lambda = 1,prior = 
 #         print(corrects)
         return corrects
     
+ls = torch.nn.LogSoftmax(dim = 2)
+def correctize_entire_nn_bert(sentence, model,p_lambda = 1,prior='transformer',trie = False,likelihood = 'default',tokenizer=None):
+    max_length = 16
+    tokens = words(sentence)
+
+    candidates = []    
+    
+    #Forcing to limit the number of candidate sentences
+    for _ in tokens:
+        candidates.append(final_candidate_words(_,use_trie = trie,force = True))
+    
+    cs = list(itertools.product(*candidates))    
+    candidate_sentences = [' '.join(sent) for sent in cs]
+
+#     if prior == 'bert':
+#     print(type(tokenizer))
+    cpl = []
+    for i in range(len(candidate_sentences))[::100]:
+#             print(i)
+        t = tokenizer(candidate_sentences[i:i+100],padding = 'max_length',max_length =max_length,truncation=True)    
+        ids = t['input_ids']
+        mask = t['attention_mask']
+        input_ids = torch.tensor(ids)
+        mask_ids = torch.tensor(mask)
+        v = model(input_ids.to(device),mask_ids.to(device))
+        f = ls(v.logits)
+        c = f[torch.arange(input_ids.shape[0])[:, None], torch.arange(input_ids.shape[1]), input_ids][:, :, None].squeeze(2)        
+        candidate_probability = torch.sum((c*mask_ids.to(device))[:],dim = 1)
+        cpl+=candidate_probability.tolist()
+
+    ids = t['input_ids']
+    mask = t['attention_mask']
+    input_ids = torch.tensor(ids)
+    mask_ids = torch.tensor(mask)
+    v = model(input_ids.to(device),mask_ids.to(device))
+    f = ls(v.logits)
+    c = f[torch.arange(input_ids.shape[0])[:, None], torch.arange(input_ids.shape[1]), input_ids][:, :, None].squeeze(2)
+
+    candidate_probabilities = torch.sum((c*mask_ids.to(device))[1:],dim = 1)
+
+    if likelihood=='default':
+        candidate_count = [len(_) for _ in candidates]  
+        sentences_probab_post=[(row*p_lambda) +
+                               math.log(constant_distributive_likelihood(sentence,candidate_sentence,candidate_count)) 
+                               for row,candidate_sentence in zip(cpl,cs)]
+    elif likelihood=='bm':
+        sentences_probab_post=[(row*p_lambda) + 
+                                math.log(likelihood_bm(sentence,candidate_sentence)) 
+                                for row,candidate_sentence in zip(cpl,cs)]
+    sorted_index = torch.argsort(torch.tensor(sentences_probab_post))
+    sentences_probab_post_sorted = sorted(sentences_probab_post,reverse = True)
+
+    return [candidate_sentences[int(k)].split() for k in torch.flip(sorted_index,dims=(0,))],sentences_probab_post_sorted
+    
+def correctize_with_window_bert(sentence,model,window = 5,p_lambda = 1,trie = False,likelihood = 'default',tokenizer=None):
+    '''
+    
+    '''   
+    
+    tokens = words(sentence)
+    if len(tokens) <= window:
+        return [correctize_entire_nn_bert(sentence,model,p_lambda=p_lambda,trie = trie,likelihood = likelihood,tokenizer=tokenizer)]
+    else:
+        windows = [tokens[n:window+n] for n in range(0,len(tokens),window-1) if window+n <len(tokens)-1]    
+        remaining = (window-1)*len(windows)
+        windows.append(tokens[remaining:])
+        corrects = []
+        for _ in windows:
+            d = correctize_entire_nn_bert(' '.join(_),model,p_lambda=p_lambda,trie = trie,likelihood = likelihood,tokenizer=tokenizer)
+            corrects.append(d)
+#         print(corrects)
+        return corrects
+
     
     
-def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type ='knlm' ,likelihood = 'default'):
+def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type ='knlm' ,likelihood = 'default',tokenizer=None,ab=False):
     
     if model_type =='knlm':
         d = correctize_with_window_knlm(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood)
@@ -402,7 +496,19 @@ def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type 
         return window_candidates,window_probab
     
     if model_type == 'transformer':
-        d = correctize_with_window_nn(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood)
+        d = correctize_with_window_nn(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood,ab=ab)
+        window_candidates = []
+        window_probab = []
+        for window in d:
+            maxim = min(len(window[0]),10)
+            top_candidates = window[0][:maxim]
+            window_candidates.append(top_candidates)
+            window_probab.append(window[1][:maxim])
+        return window_candidates,window_probab
+    
+    else:
+#         print(type(tokenizer))
+        d = correctize_with_window_bert(sample_sentences,model,p_lambda =p_lambda,trie = trie,likelihood = likelihood,tokenizer=tokenizer)
         window_candidates = []
         window_probab = []
         for window in d:
@@ -414,13 +520,11 @@ def return_choices2(sample_sentences,model,p_lambda = 1,trie = False,model_type 
         
         
     
-def extract_choices(sample_sentences,model,p_lambda = 1,trie = False,likelihood = 'default',model_type = 'knlm'):
+def extract_choices(sample_sentences,model,p_lambda = 1,trie = False,likelihood = 'default',model_type = 'knlm',tokenizer=None,ab=False):
     
-    
-    wc,wp = return_choices2(sample_sentences,model,p_lambda = p_lambda,trie = trie ,model_type = model_type,likelihood = likelihood)
-#     choices_list=[set() for i in range(len(sample_sentences.split())+1)]
+#     print(type(tokenizer))
+    wc,wp = return_choices2(sample_sentences,model,p_lambda = p_lambda,trie = trie ,model_type = model_type,likelihood = likelihood,tokenizer=tokenizer,ab=ab)
     choices_list=[[] for i in range(len(sample_sentences.split())+1)]
-#     print(len(choices_list))
 
     const = 0
     for _ in wc:
@@ -431,3 +535,6 @@ def extract_choices(sample_sentences,model,p_lambda = 1,trie = False,likelihood 
                     choices_list[index].append(w)
         const += len(wc[0][0])-1
     return choices_list
+
+
+    
