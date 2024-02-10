@@ -1,5 +1,5 @@
-# Nepali-
-Nepali spelling correction
+# Nepali-spell-checker
+The Nepali spell checker repository uses the noisy channel technique to perform spelling corrections. We use different variants of both Language model and Error model. Those variants are briefly explained below:
 
 ## Language Models
 
@@ -21,6 +21,7 @@ Nepali spelling correction
         α                         if x = w
         (1−α) / |C(x)|−1         if x ∈ C(x)
         0                         if x /∈ C(x)
+    }
     ```
     We choose the value of α to be 0.65.
 
@@ -30,11 +31,12 @@ Nepali spelling correction
 
 # Model Training
 
-
+We have code for training the Probabilistic language model in notebooks under `training notebooks`. Knlm2 can be trained by running `save_counters.ipynb`,`save_depth.ipynb`, and `Kn_smoothed_LM.ipynb`. The Brill and Moore(BM) likelihood can be trained by running `likelihood_train.ipynb` notebook. The code for training Transformer LM isn't present in this repository.
+All the models can be downloaded from this link.
 
 
 # Error Generation
-
+To generate error data, run `Gen_error.ipynb` notebook under training notebooks directory.
 
 
 # Experiments
